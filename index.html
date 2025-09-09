@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Análisis Interactivo de Rúbrica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Simple scrollbar styling for better aesthetics */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #f1f5f9;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #a8a29e; /* stone-400 */
+        border-radius: 10px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #78716c; /* stone-500 */
+      }
+      
+      /* Floating animation for quiz question */
+      @keyframes float {
+        0% { transform: translateY(0px); }
+        50% { transform: translateY(-8px); }
+        100% { transform: translateY(0px); }
+      }
+      .animate-float {
+        animation: float 3s ease-in-out infinite;
+      }
+
+      /* Star animation for correct answers */
+      .star-burst {
+        position: relative;
+        display: inline-block;
+      }
+      .star {
+        position: absolute;
+        width: 10px;
+        height: 10px;
+        background: #f59e0b; /* amber-500 */
+        clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+        opacity: 0;
+        animation: burst 0.8s ease-out forwards;
+      }
+      @keyframes burst {
+        0% { transform: scale(0.5) rotate(0deg); opacity: 1; }
+        100% { transform: scale(1.5) rotate(180deg); opacity: 0; }
+      }
+
+      /* Fade-in animation */
+      @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      .animate-fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+      }
+      
+      /* New floating robot animation */
+      @keyframes float-across {
+        0% {
+          transform: translateX(-100%) translateY(-5px);
+          opacity: 0.8;
+        }
+        20% {
+          transform: translateX(20vw) translateY(5px);
+        }
+        80% {
+          transform: translateX(60vw) translateY(-5px);
+        }
+        100% {
+          transform: translateX(100vw) translateY(0px);
+          opacity: 0.8;
+        }
+      }
+      .animate-float-across {
+        animation: float-across 15s linear infinite;
+        animation-delay: 1s;
+      }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.1.1/",
+    "react/": "https://aistudiocdn.com/react@^19.1.1/",
+    "react": "https://aistudiocdn.com/react@^19.1.1",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.18.0"
+  }
+}
+</script>
+</head>
+<body class="bg-stone-100 antialiased">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>
