@@ -12,8 +12,6 @@ const extractTextFromReactNode = (node: React.ReactNode): string => {
     if (typeof node === 'string') return node;
     if (typeof node === 'number') return String(node);
     if (Array.isArray(node)) return node.map(extractTextFromReactNode).join(' ');
-    // FIX: Cast node.props to access children. TypeScript was inferring `node.props` as `unknown`,
-    // causing an error when trying to access the `children` property.
     if (React.isValidElement(node)) {
         const props = node.props as { children?: React.ReactNode };
         if (props.children) {
@@ -34,8 +32,15 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
     
     // Initialize Chat
     useEffect(() => {
+        // Explicitly check for the API key at the start.
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            setError("No se pudo inicializar el asistente de IA. La clave de API no fue encontrada en el entorno de la aplicación.");
+            return;
+        }
+
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const ai = new GoogleGenAI({ apiKey });
             const analysisText = extractTextFromReactNode(criterion.analysis.content);
             const summaryText = extractTextFromReactNode(criterion.summary.content);
             
@@ -45,13 +50,14 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                 model: 'gemini-2.5-flash',
                 config: { systemInstruction },
             });
-            setChat(chatInstance);
             
-            setMessages([{ role: 'model', text: '¡Hola! Soy Rubi, tu tutor robótico. Parece que tuviste una duda. ¡No te preocupes! Sigue intentando. Si tienes alguna pregunta sobre este tema, escríbela abajo y haré lo mejor para ayudarte.' }]);
+            // Set chat and initial message only after successful initialization.
+            setChat(chatInstance);
+            setMessages([{ role: 'model', text: '¡Hola! Soy Rubi, tu tutor robótico. Parece que tuviste una duda. ¡No te preocupes! Si tienes alguna pregunta sobre este tema, escríbela abajo y haré lo mejor para ayudarte.' }]);
 
         } catch (e) {
             console.error("Error initializing Gemini:", e);
-            setError("No se pudo inicializar el asistente de IA. Asegúrate de que la clave de API esté configurada.");
+            setError("Ocurrió un error inesperado al inicializar el asistente de IA.");
         }
     }, [criterion]);
 
@@ -89,8 +95,8 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
 
         } catch (e) {
             console.error("Error sending message:", e);
-            setError("Hubo un error al comunicarse con el asistente. Por favor, inténtalo de nuevo.");
-            setMessages(prev => [...prev.slice(0, -1), { role: 'model', text: 'Lo siento, no pude procesar tu solicitud.' }]);
+            setError("Hubo un error al comunicarse con el asistente. Por favor, inténtalo de nuevo más tarde.");
+            setMessages(prev => prev.filter(p => p.role !== 'model' || p.text !== ''));
         } finally {
             setIsLoading(false);
         }
@@ -111,7 +117,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                         </div>
                     </div>
                 ))}
-                {isLoading && messages[messages.length -1].role === 'user' && (
+                {isLoading && messages[messages.length -1]?.role === 'user' && (
                      <div className="flex items-start gap-2.5">
                         <RobotIcon className="w-6 h-6 text-stone-500 flex-shrink-0" />
                         <div className="p-3 rounded-lg bg-slate-100">
@@ -125,14 +131,16 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                 )}
                 <div ref={messagesEndRef} />
             </div>
-            {error && <p className="px-4 pb-2 text-xs text-red-600">{error}</p>}
+            
+            {error && <p className="px-4 pb-2 text-sm text-red-600">{error}</p>}
+
             <form onSubmit={handleSendMessage} className="p-2 border-t flex items-center">
                 <input
                     type="text"
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
-                    placeholder="Haz una pregunta sobre el tema..."
-                    className="flex-1 px-3 py-2 text-sm border-slate-300 rounded-lg focus:ring-stone-500 focus:border-stone-500"
+                    placeholder={!chat ? "Asistente no disponible" : "Haz una pregunta sobre el tema..."}
+                    className="flex-1 px-3 py-2 text-sm border-slate-300 rounded-lg focus:ring-stone-500 focus:border-stone-500 disabled:bg-slate-100"
                     disabled={isLoading || !chat}
                 />
                 <button type="submit" disabled={isLoading || !userInput.trim() || !chat} className="ml-2 p-2 bg-stone-500 text-white rounded-full hover:bg-stone-600 disabled:bg-slate-300">
