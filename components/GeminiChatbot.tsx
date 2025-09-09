@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import type { Criterion } from '../types';
 import { RobotIcon, SendIcon } from './icons';
-import { API_KEY } from '../config';
 
 interface GeminiChatbotProps {
     criterion: Criterion;
@@ -33,9 +32,9 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
     
     // Initialize Chat
     useEffect(() => {
-        const apiKey = API_KEY;
+        const apiKey = process.env.API_KEY;
         if (!apiKey) {
-            setError("No se pudo inicializar el asistente de IA. La clave de API no está configurada en el archivo 'config.ts'.");
+            setError("No se pudo inicializar el asistente de IA. La clave de API no está configurada.");
             return;
         }
 
