@@ -32,10 +32,10 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
     
     // Initialize Chat
     useEffect(() => {
-        // Explicitly check for the API key at the start.
+        // Fix: Use API key from environment variables as per guidelines. This resolves the TypeScript error.
         const apiKey = process.env.API_KEY;
         if (!apiKey) {
-            setError("No se pudo inicializar el asistente de IA. La clave de API no fue encontrada en el entorno de la aplicación.");
+            setError("No se pudo inicializar el asistente de IA. La clave de API no está configurada.");
             return;
         }
 
