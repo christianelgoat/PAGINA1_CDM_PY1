@@ -67,9 +67,18 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                 body: JSON.stringify({ messages: updatedMessages, systemInstruction }),
             });
 
-            if (!response.ok || !response.body) {
-                const errorText = await response.text();
-                throw new Error(errorText || `Error del servidor: ${response.status}`);
+            if (!response.ok) {
+                let errorPayload;
+                try {
+                    errorPayload = await response.json();
+                } catch (jsonError) {
+                    errorPayload = { error: await response.text() };
+                }
+                throw new Error(errorPayload.error || `Error del servidor: ${response.status}`);
+            }
+
+            if (!response.body) {
+                throw new Error("La respuesta del servidor está vacía.");
             }
             
             setMessages(prev => [...prev, { role: 'model', text: '' }]);
@@ -91,8 +100,21 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
 
         } catch (e) {
             console.error("Error sending message:", e);
-            const errorMessage = e instanceof Error ? e.message : "Hubo un error al comunicarse con el asistente.";
-            setError(errorMessage);
+            let detailedError = "Hubo un error al comunicarse con el asistente. Inténtalo de nuevo.";
+            const serverMessage = e instanceof Error ? e.message : "Error desconocido";
+
+            if (serverMessage.includes("API key not configured")) {
+                detailedError = "Error de Configuración: La clave de API no se encontró en el servidor.\n\n" +
+                                "Por favor, verifica lo siguiente en tu panel de Vercel:\n" +
+                                "1. Ve a Settings > Environment Variables.\n" +
+                                "2. Asegúrate de que existe una variable con el nombre EXACTO: API_KEY\n" +
+                                "3. Confirma que la clave está aplicada a todos los entornos.\n" +
+                                "4. ¡Muy importante! Vuelve a desplegar (Redeploy) el proyecto después de guardar la variable.";
+            } else {
+                detailedError = `Error del servidor: ${serverMessage}`;
+            }
+            
+            setError(detailedError);
             // Remove the empty placeholder on error
             setMessages(prev => prev.filter(p => p.role !== 'model' || p.text !== ''));
         } finally {
@@ -130,7 +152,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                 <div ref={messagesEndRef} />
             </div>
             
-            {error && <p className="px-4 pb-2 text-sm text-red-600">{error}</p>}
+            {error && <p className="px-4 pb-2 text-sm text-red-600 whitespace-pre-wrap">{error}</p>}
 
             <form onSubmit={handleSendMessage} className="p-2 border-t flex items-center">
                 <input

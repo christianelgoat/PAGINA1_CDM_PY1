@@ -7,12 +7,12 @@ export async function POST(req: Request) {
   try {
     const apiKey = process.env.API_KEY;
     if (!apiKey) {
-      return new Response("API key not configured", { status: 500 });
+      return Response.json({ error: "API key not configured" }, { status: 500 });
     }
 
     const { messages, systemInstruction } = await req.json();
     if (!messages || !systemInstruction) {
-        return new Response("Invalid request body", { status: 400 });
+        return Response.json({ error: "Invalid request body" }, { status: 400 });
     }
 
     const ai = new GoogleGenAI({ apiKey });
@@ -25,7 +25,7 @@ export async function POST(req: Request) {
     
     const lastMessage = messages[messages.length - 1];
     if (!lastMessage || lastMessage.role !== 'user') {
-        return new Response("Last message must be from the user", { status: 400 });
+        return Response.json({ error: "Last message must be from the user" }, { status: 400 });
     }
 
     const chat = ai.chats.create({
@@ -57,6 +57,6 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("Error in API route:", error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    return new Response(JSON.stringify({ error: errorMessage }), { status: 500 });
+    return Response.json({ error: errorMessage }, { status: 500 });
   }
 }
