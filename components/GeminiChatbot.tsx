@@ -1,10 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { GoogleGenAI, Chat } from "@google/genai";
 import type { Criterion } from '../types';
 import { RobotIcon, SendIcon } from './icons';
 
 interface GeminiChatbotProps {
     criterion: Criterion;
+}
+
+interface Message {
+    role: 'user' | 'model';
+    text: string;
 }
 
 // Helper to extract text from ReactNode for the system prompt
@@ -21,43 +25,22 @@ const extractTextFromReactNode = (node: React.ReactNode): string => {
     return '';
 };
 
-
 export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
-    const [chat, setChat] = useState<Chat | null>(null);
-    const [messages, setMessages] = useState<Array<{ role: 'user' | 'model', text: string }>>([]);
+    const [messages, setMessages] = useState<Message[]>([
+        { role: 'model', text: '¡Hola! Soy Rubi, tu tutor robótico. Parece que tuviste una duda. ¡No te preocupes! Si tienes alguna pregunta sobre este tema, escríbela abajo y haré lo mejor para ayudarte.' }
+    ]);
     const [userInput, setUserInput] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [systemInstruction, setSystemInstruction] = useState('');
     const messagesEndRef = useRef<HTMLDivElement>(null);
     
-    // Initialize Chat
     useEffect(() => {
-        const apiKey = process.env.API_KEY;
-        if (!apiKey) {
-            setError("No se pudo inicializar el asistente de IA. La clave de API no está configurada.");
-            return;
-        }
-
-        try {
-            const ai = new GoogleGenAI({ apiKey });
-            const analysisText = extractTextFromReactNode(criterion.analysis.content);
-            const summaryText = extractTextFromReactNode(criterion.summary.content);
-            
-            const systemInstruction = `Eres un robot tutor amigable llamado 'Rubi'. Tu único propósito es ayudar a los usuarios a comprender un tema específico relacionado con un artículo científico sobre biosensores. Tu conocimiento se limita ESTRICTAMENTE a la siguiente información sobre el criterio "${criterion.title}":\n\n---CONTEXTO---\nAnálisis: ${analysisText}\nResumen Clave: ${summaryText}\n\nNo respondas a ninguna pregunta que no esté directamente relacionada con este contexto. Si te preguntan sobre otra cosa, responde amablemente: "Mi programación solo me permite ayudarte con el tema de '${criterion.title}'. ¿Tienes alguna duda sobre eso?". Sé conciso y claro en tus explicaciones. Comienza tu primera respuesta saludando y presentándote como Rubi, el robot tutor.`;
-
-            const chatInstance = ai.chats.create({
-                model: 'gemini-2.5-flash',
-                config: { systemInstruction },
-            });
-            
-            // Set chat and initial message only after successful initialization.
-            setChat(chatInstance);
-            setMessages([{ role: 'model', text: '¡Hola! Soy Rubi, tu tutor robótico. Parece que tuviste una duda. ¡No te preocupes! Si tienes alguna pregunta sobre este tema, escríbela abajo y haré lo mejor para ayudarte.' }]);
-
-        } catch (e) {
-            console.error("Error initializing Gemini:", e);
-            setError("Ocurrió un error inesperado al inicializar el asistente de IA.");
-        }
+        const analysisText = extractTextFromReactNode(criterion.analysis.content);
+        const summaryText = extractTextFromReactNode(criterion.summary.content);
+        
+        const instruction = `Eres un robot tutor amigable llamado 'Rubi'. Tu único propósito es ayudar a los usuarios a comprender un tema específico relacionado con un artículo científico sobre biosensores. Tu conocimiento se limita ESTRICTAMENTE a la siguiente información sobre el criterio "${criterion.title}":\n\n---CONTEXTO---\nAnálisis: ${analysisText}\nResumen Clave: ${summaryText}\n\nNo respondas a ninguna pregunta que no esté directamente relacionada con este contexto. Si te preguntan sobre otra cosa, responde amablemente: "Mi programación solo me permite ayudarte con el tema de '${criterion.title}'. ¿Tienes alguna duda sobre eso?". Sé conciso y claro en tus explicaciones. No te presentes en cada respuesta, solo en la primera.`;
+        setSystemInstruction(instruction);
     }, [criterion]);
 
     const scrollToBottom = () => {
@@ -68,33 +51,49 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
 
     const handleSendMessage = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!userInput.trim() || isLoading || !chat) return;
+        if (!userInput.trim() || isLoading) return;
 
-        const userMessage = { role: 'user' as const, text: userInput };
-        setMessages(prev => [...prev, userMessage]);
-        const currentInput = userInput;
+        const userMessage: Message = { role: 'user', text: userInput };
+        const updatedMessages = [...messages, userMessage];
+        setMessages(updatedMessages);
         setUserInput('');
         setIsLoading(true);
         setError(null);
 
         try {
-            const responseStream = await chat.sendMessageStream({ message: currentInput });
-            
-            let modelResponse = '';
-            setMessages(prev => [...prev, { role: 'model', text: '' }]);
+            const response = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ messages: updatedMessages, systemInstruction }),
+            });
 
-            for await (const chunk of responseStream) {
-                modelResponse += chunk.text;
+            if (!response.ok || !response.body) {
+                const errorText = await response.text();
+                throw new Error(errorText || `Error del servidor: ${response.status}`);
+            }
+            
+            setMessages(prev => [...prev, { role: 'model', text: '' }]);
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                
+                const chunk = decoder.decode(value, { stream: true });
                 setMessages(prev => {
                     const newMessages = [...prev];
-                    newMessages[newMessages.length - 1].text = modelResponse;
+                    newMessages[newMessages.length - 1].text += chunk;
                     return newMessages;
                 });
             }
 
         } catch (e) {
             console.error("Error sending message:", e);
-            setError("Hubo un error al comunicarse con el asistente. Por favor, inténtalo de nuevo más tarde.");
+            const errorMessage = e instanceof Error ? e.message : "Hubo un error al comunicarse con el asistente.";
+            setError(errorMessage);
+            // Remove the empty placeholder on error
             setMessages(prev => prev.filter(p => p.role !== 'model' || p.text !== ''));
         } finally {
             setIsLoading(false);
@@ -116,7 +115,7 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                         </div>
                     </div>
                 ))}
-                {isLoading && messages[messages.length -1]?.role === 'user' && (
+                {isLoading && messages[messages.length -1]?.role !== 'model' && (
                      <div className="flex items-start gap-2.5">
                         <RobotIcon className="w-6 h-6 text-stone-500 flex-shrink-0" />
                         <div className="p-3 rounded-lg bg-slate-100">
@@ -138,11 +137,11 @@ export const GeminiChatbot: React.FC<GeminiChatbotProps> = ({ criterion }) => {
                     type="text"
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
-                    placeholder={!chat ? "Asistente no disponible" : "Haz una pregunta sobre el tema..."}
+                    placeholder={"Haz una pregunta sobre el tema..."}
                     className="flex-1 px-3 py-2 text-sm border-slate-300 rounded-lg focus:ring-stone-500 focus:border-stone-500 disabled:bg-slate-100"
-                    disabled={isLoading || !chat}
+                    disabled={isLoading}
                 />
-                <button type="submit" disabled={isLoading || !userInput.trim() || !chat} className="ml-2 p-2 bg-stone-500 text-white rounded-full hover:bg-stone-600 disabled:bg-slate-300">
+                <button type="submit" disabled={isLoading || !userInput.trim()} className="ml-2 p-2 bg-stone-500 text-white rounded-full hover:bg-stone-600 disabled:bg-slate-300">
                     <SendIcon className="w-5 h-5"/>
                 </button>
             </form>
